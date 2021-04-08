@@ -1,6 +1,15 @@
 import torch
+import os
 import sys
-sys.path.append("/home/telma/opt/tiger/argument-judgment")
+import json
+import jsonlines
+import importlib
+importlib.reload(sys)
+import codecs
+# sys.setdefaultencoding( "utf-8" )
+sys.stdout = codecs.getwriter("utf-8")(sys.stdout.detach()) 
+sys.path.append(os.getcwd())
+sys.path.append("/users10/lyzhang/opt/tiger/argument-judgment")
 from util import common
 from model import ESIM
 from config.config import args
@@ -25,10 +34,27 @@ def prepare_data(path):
     test_data = re_data[int(len(re_data)*0.9):]
     return train_data, valid_data, test_data
 
+def load_data(path):
+    re_data = []
+    with open(path, "r", encoding="utf-8") as f:
+        data = jsonlines.Reader(f)
+        for item in data:
+            re_data.append(item)
+        # for i in range(len(data)):
+        #     data[i] = json.loads(data[i], encoding="utf-8")
+    # assert data[0]["sen1"] == "但其实并非如此，外面那层泥土自己也可以剥去，自己让自己绽放光彩。"
+    logging.debug(re_data[0])
+    return re_data
+
 if __name__ == "__main__":
     logging.info("Prepare raw data...")
-    train_rawdata, valid_rawdata, test_rawdata = prepare_data(args.data_path)
+    # train_rawdata, valid_rawdata = prepare_data(args.data_path)
     # print(len(train_rawdata), len(valid_rawdata), len(test_rawdata))
+    train_rawdata = load_data(args.train_path)
+    # assert train_rawdata[0]["sen1"] == "但其实并非如此，外面那层泥土自己也可以剥去，自己让自己绽放光彩。"
+    valid_rawdata = load_data(args.valid_path)
+    logging.debug(len(train_rawdata))
+    logging.debug(len(valid_rawdata))
     sen_vocab, label_vocab = common.build_vocab(train_rawdata)
     train_data = common.word2idx(train_rawdata, sen_vocab, label_vocab)
     valid_data = common.word2idx(valid_rawdata, sen_vocab, label_vocab)
@@ -45,8 +71,9 @@ if __name__ == "__main__":
     train_iter = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     valid_iter = torch.utils.data.DataLoader(valid_dataset, batch_size=args.batch_size)
     logging.info("Data preparing finished!!!")
+    logging.debug(sen_vocab[0][:20])
     logging.debug(label_vocab[0])
     args.class_num = len(label_vocab[0])
     args.embed_num = len(sen_vocab[0])
-    model = ESIM.ESIM(args)
+    model = ESIM.ESIM(args).cuda()
     train.train(train_iter, valid_iter, model, args)

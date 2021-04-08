@@ -1,3 +1,7 @@
-/data/seg_sentence_3.txt
+/data
 /test
 *.log
+test.py
+__pycache__
+*.json
+.vscode

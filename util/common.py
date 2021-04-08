@@ -2,6 +2,23 @@ import torch
 import os
 import re
 import random
+import logging
+import json
+import jsonlines
+
+def load_data(path):
+    re_data = []
+    with open(path, "r", encoding="utf-8") as f:
+        data = jsonlines.Reader(f)
+        for item in data:
+            if len(item["sen1"]) > 512 or len(item["sen2"]) > 512:
+                continue
+            re_data.append(item)
+        # for i in range(len(data)):
+        #     data[i] = json.loads(data[i], encoding="utf-8")
+    # assert data[0]["sen1"] == "但其实并非如此，外面那层泥土自己也可以剥去，自己让自己绽放光彩。"
+    logging.debug(re_data[0])
+    return re_data
 
 def read_raw_data(url):
     data = dict()
@@ -18,7 +35,7 @@ def read_raw_data(url):
             data[int(line[0])][int(line[1])] = dict()
         if data[int(line[0])][int(line[1])].get(line[4], None) is None:
             data[int(line[0])][int(line[1])][line[4]] = []
-        if len(line[5])<=3: continue
+        if len(line[5].strip().replace("|", ""))<=10: continue
         data[int(line[0])][int(line[1])][line[4]].append(line[5].strip().replace("|", ""))
     return data
 
@@ -37,6 +54,45 @@ def get_theis2idea(raw_data):
             for j in range(i+1, len(ideas)):
                 result.append({"sen1": ideas[i], "sen2": ideas[j], "label": "SameIdea"})
     return result    
+
+def get_theis_support(raw_data):
+    result = []
+    for _, page in raw_data.items():
+        thesises = []
+        ideas = []
+        for _, block in page.items():
+            thesises.extend(block.get("thesisSen", []))
+            ideas.extend(block.get("ideaSen", []))
+        for thesis in thesises:
+            for idea in ideas:
+                rand = random.randint(0,1)
+                if rand == 0:
+                    result.append({"sen1": thesis, "sen2": idea, "label": "B2A"})
+                else :
+                    result.append({"sen1": idea, "sen2": thesis, "label": "A2B"})
+    return result   
+
+def get_support(raw_data):
+    result = []
+    for _, page in raw_data.items():
+        for _, block in page.items():
+            ideas = block.get("ideaSen", [])
+            supports = block.get("ideasupportSen", [])
+            examples = block.get("exampleSen", [])
+            for idea in ideas:
+                for example in examples:
+                    rand = random.randint(0,1)
+                    if rand == 0:
+                        result.append({"sen1": idea, "sen2": example, "label": "B2A"})
+                    else :
+                        result.append({"sen1": example, "sen2": idea, "label": "A2B"})
+                for support in supports:
+                    rand = random.randint(0,1)
+                    if rand == 0:
+                        result.append({"sen1": idea, "sen2": support, "label": "B2A"})
+                    else :
+                        result.append({"sen1": support, "sen2": idea, "label": "A2B"})
+    return result
 
 def get_idea2support(raw_data):
     result = []
@@ -111,6 +167,7 @@ def build_vocab(dataset):
     sen_itos.insert(0, "<PAD>")
     sen_stoi = dict()
     label_stoi = dict()
+    logging.debug(label_times)
     # print(label_times)
     for index, word in enumerate(sen_itos):
         sen_stoi[word]=index
@@ -149,6 +206,22 @@ def fix_dataset(dataset, word_vocab, fix_length):
         dataset[i]["sen2"] = (dataset[i]["sen2"] + [stoi["<PAD>"]] * max(0, fix_length - len(dataset[i]["sen2"])))[:fix_length]   
     return dataset
 
+def bert_concat_tokenizer(sen1, sen2, tokenizer, fix_length=None):
+    sen1_ids = tokenizer.encode(sen1, add_special_tokens=False)
+    sen2_ids = tokenizer.encode(sen2, add_special_tokens=False)
+    if fix_length is not None:
+        sen1_ids = (sen1_ids + [0] * max(0, fix_length - len(sen1_ids)))[:fix_length]
+        sen2_ids = (sen2_ids + [0] * max(0, fix_length - len(sen2_ids)))[:fix_length]
+    sen_ids = [101] + sen1_ids + [102] + sen2_ids +[102]
+    return sen_ids
+
+def bert_tokenizer(sen, tokenizer, fix_length=None):
+    sen_ids = tokenizer.encode(sen, add_special_tokens=False)
+    if fix_length is not None:
+        sen_ids = (sen_ids + [0] * max(0, fix_length - len(sen_ids)))[:fix_length]
+    sen_ids = [101] + sen_ids + [102]
+    return sen_ids
+
 def gen_tensor(dataset):
     sen1 = torch.LongTensor([item["sen1"] for item in dataset])
     sen1_mask = torch.LongTensor([item["sen1_mask"] for item in dataset])
@@ -164,16 +237,17 @@ def gen_tensor(dataset):
     
 
 if __name__ == "__main__":
-    itos, stoi = load_vocab("./data/bert/vocab.txt")
-    raw_data = read_raw_data("./data/seg_sentence_3.txt")
-    # print(raw_data[0])
-    results = get_neutral(raw_data, 20000) + get_idea2support(raw_data) + get_theis2idea(raw_data)
-    print(len(results))
+    # itos, stoi = load_vocab("./data/bert/vocab.txt")
+    raw_data = read_raw_data("../data/seg_sentence_3.txt")
+    # print(len(raw_data))
+    print(raw_data[0])
+    # results = get_neutral(raw_data, 20000) + get_idea2support(raw_data) + get_theis2idea(raw_data)
+    # print(len(results))
     # results = get_idea2support(raw_data)
     # results = get_theis2idea(raw_data)
     # print(results[:5])
-    word_vocab, label_vocab = build_vocab(results)
-    print(label_vocab[0])
+    # word_vocab, label_vocab = build_vocab(results)
+    # print(label_vocab[0])
     # print(word_vocab[0])
     # print(word_vocab[1])
     # dataset = word2idx(results[6:10], word_vocab, label_vocab)
