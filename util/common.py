@@ -39,6 +39,34 @@ def read_raw_data(url):
         data[int(line[0])][int(line[1])][line[4]].append(line[5].strip().replace("|", ""))
     return data
 
+def read_raw_data_v2(url):
+    data = dict()
+    pre = None
+    # print("start...")
+    with open(url, "r", encoding="utf-8") as f:
+        raw_data = f.readlines()
+    for line in raw_data:
+        line = re.split(r"\t", line)
+        page, block, label = int(line[0]), int(line[1]), line[4]
+        # logging.info("page:{} block:{} label:{}".format(page, block, label))
+        if(page>=6000):
+            # print("NO")
+            break
+        if data.get(page, None) is None:
+            data[page] = dict()
+        if data[page].get(block, None) is None:
+            data[page][block] = dict()
+            pre = None
+        if data[page][block].get(label, None) is None:
+            data[page][block][label] = []
+        if pre == label or (len(line[5].strip()) == 1 and pre is not None):
+            data[page][block][pre][-1] += ("|" + line[5].strip())
+        else:
+            data[page][block][label].append(line[5].strip())
+            pre = label
+    # print("YYES")
+    return data
+
 def get_theis2idea(raw_data):
     result = []
     for _, page in raw_data.items():
@@ -92,6 +120,52 @@ def get_support(raw_data):
                         result.append({"sen1": idea, "sen2": support, "label": "B2A"})
                     else :
                         result.append({"sen1": support, "sen2": idea, "label": "A2B"})
+    return result
+
+def get_support_v2(raw_data):
+    result = []
+    for page_ids, page in raw_data.items():
+        thesis = []
+        pre_ideas = []
+        for block_ids, block in page.items():
+            # logging.info("page:{}. block:{}".format(page_ids, block_ids))
+            thesis += block.get("thesisSen", [])
+            # logging.info(thesis)
+            ideas = block.get("ideaSen", [])
+            supports = block.get("ideasupportSen", [])
+            examples = block.get("exampleSen", [])
+            for idea in ideas:
+                for example in examples:
+                    rand = random.randint(0,1)
+                    if rand == 0:
+                        result.append({"sen1": idea, "sen2": example, "label": "B2A"})
+                    else :
+                        result.append({"sen1": example, "sen2": idea, "label": "A2B"})
+                for support in supports:
+                    rand = random.randint(0,1)
+                    if rand == 0:
+                        result.append({"sen1": idea, "sen2": support, "label": "B2A"})
+                    else :
+                        result.append({"sen1": support, "sen2": idea, "label": "A2B"})
+            if len(ideas) == 0:
+                if len(pre_ideas) == 0:
+                    pre_ideas = thesis.copy()
+                for idea in pre_ideas:
+                    for example in examples:
+                        rand = random.randint(0,1)
+                        if rand == 0:
+                            result.append({"sen1": idea, "sen2": example, "label": "B2A"})
+                        else :
+                            result.append({"sen1": example, "sen2": idea, "label": "A2B"})
+                    for support in supports:
+                        rand = random.randint(0,1)
+                        if rand == 0:
+                            result.append({"sen1": idea, "sen2": support, "label": "B2A"})
+                        else :
+                            result.append({"sen1": support, "sen2": idea, "label": "A2B"})
+            else :
+                # pre_ideas = list(ideas[-1])
+                pre_ideas = ideas[-1:]
     return result
 
 def get_idea2support(raw_data):
