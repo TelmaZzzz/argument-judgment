@@ -6,6 +6,20 @@ from transformers import BertModel
 import logging
 
 
+class LayerNorm(nn.Module):
+    def __init__(self, hidden_dim, eps=1e-12):
+        super(LayerNorm, self).__init__()
+        self._weight = nn.Parameter(torch.ones(hidden_dim))
+        self._bias = nn.Parameter(torch.zeros(hidden_dim))
+        self._eps = eps
+
+    def forward(self, x):
+        u = x.mean(-1, keepdim=True)
+        s = (x - u).pow(2).mean(-1, keepdim=True)
+        x = (x - u) / torch.sqrt(s + self._eps)
+        return self._weight * x + self._bias
+
+
 class BERT_ESIM(nn.Module):
     def __init__(self, args):
         super(BERT_ESIM, self).__init__()
@@ -24,9 +38,9 @@ class BERT_ESIM(nn.Module):
             nn.Linear(args.fc2_dim, args.class_num)
         )
         self._F = nn.Sequential(
-            nn.Linear(args.bert_dim * 4, args.bert_dim * 4),
             nn.Dropout(args.dropout),
-            nn.ReLU(inplace=True)
+            nn.Linear(args.bert_dim * 4, args.bert_dim * 4),
+            # nn.ReLU(inplace=True)
         )
 
     def _pooling(self, v):
@@ -61,6 +75,7 @@ class BERT_ESIM(nn.Module):
         terminal = self._FC(v)
         return terminal
 
+
 class BERT_ESIM_ALL(nn.Module):
     def __init__(self, args):
         super(BERT_ESIM_ALL, self).__init__()
@@ -82,9 +97,9 @@ class BERT_ESIM_ALL(nn.Module):
         )
         self._F = nn.Sequential(
             # nn.BatchNorm1d(args.hidden_dim * 4),
-            nn.Linear(args.hidden_dim * 4, args.hidden_dim * 4),
             nn.Dropout(args.dropout),
-            nn.ReLU(inplace=True),
+            nn.Linear(args.hidden_dim * 4, args.hidden_dim * 4),
+            # nn.ReLU(inplace=True),
         )
     
     def _f(self, x):
@@ -101,6 +116,7 @@ class BERT_ESIM_ALL(nn.Module):
         # xa: batch_size * lena * dim
         # xb: batch_size * lenb * dim
         e = torch.matmul(xa, xb.transpose(1, 2)) # batch_size * lena * lenb
+        self.e = e
         weighta = e.softmax(-1) # batch_size * lena * lenb
         weightb = e.transpose(1, 2).softmax(-1) # batch_size * lenb * lena
         logging.debug("weighta:{}".format(weighta.size()))
@@ -111,12 +127,12 @@ class BERT_ESIM_ALL(nn.Module):
         return torch.cat([F.avg_pool1d(v.transpose(1, 2), v.size(1)).squeeze(-1), F.max_pool1d(v.transpose(1, 2), v.size(1)).squeeze(-1)], -1)
     
     def forward(self, xa, xb):
-        xa = self._bert(xa)[0][:, 1:-1, :] # batch * len+2 * dim
+        xa = self._bert(xa, return_dict=False)[0][:, 1:-1, :]  # batch * len+2 * dim
         logging.debug("xa shape:{}".format(xa.size()))
         # xa = xa.transpose(0, 1)[1:-1]
         # xa = xa.transpose(0, 1)
         # xa = xa[:, 1:-1, :]
-        xb = self._bert(xb)[0][:, 1:-1, :]
+        xb = self._bert(xb, return_dict=False)[0][:, 1:-1, :]
         logging.debug("xb shape:{}".format(xb.size()))
         # xb = xb.transpose(0, 1)[1:-1]
         # xb = xb.transpose(0, 1)

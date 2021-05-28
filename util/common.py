@@ -60,9 +60,9 @@ def read_raw_data_v2(url):
         if data[page][block].get(label, None) is None:
             data[page][block][label] = []
         if pre == label or (len(line[5].strip()) == 1 and pre is not None):
-            data[page][block][pre][-1] += ("|" + line[5].strip())
+            data[page][block][pre][-1] += line[5].strip().replace("|", "")
         else:
-            data[page][block][label].append(line[5].strip())
+            data[page][block][label].append(line[5].strip().replace("|", ""))
             pre = label
     # print("YYES")
     return data
@@ -280,21 +280,31 @@ def fix_dataset(dataset, word_vocab, fix_length):
         dataset[i]["sen2"] = (dataset[i]["sen2"] + [stoi["<PAD>"]] * max(0, fix_length - len(dataset[i]["sen2"])))[:fix_length]   
     return dataset
 
+
 def bert_concat_tokenizer(sen1, sen2, tokenizer, fix_length=None):
     sen1_ids = tokenizer.encode(sen1, add_special_tokens=False)
     sen2_ids = tokenizer.encode(sen2, add_special_tokens=False)
     if fix_length is not None:
-        sen1_ids = (sen1_ids + [0] * max(0, fix_length - len(sen1_ids)))[:fix_length]
-        sen2_ids = (sen2_ids + [0] * max(0, fix_length - len(sen2_ids)))[:fix_length]
-    sen_ids = [101] + sen1_ids + [102] + sen2_ids +[102]
+        while len(sen1_ids) + len(sen2_ids) > fix_length * 2 - 3:
+            if len(sen1_ids) > len(sen2_ids):
+                sen1_ids.pop()
+            else:
+                sen2_ids.pop()
+        sen_ids = [101] + sen1_ids + [102] + sen2_ids + [102]
+        sen_ids = sen_ids + [0] * (fix_length * 2 - len(sen_ids))
+    else:
+        sen_ids = [101] + sen1_ids + [102] + sen2_ids + [102]
     return sen_ids
+
 
 def bert_tokenizer(sen, tokenizer, fix_length=None):
     sen_ids = tokenizer.encode(sen, add_special_tokens=False)
-    if fix_length is not None:
-        sen_ids = (sen_ids + [0] * max(0, fix_length - len(sen_ids)))[:fix_length]
+    while len(sen_ids) > fix_length - 2:
+        sen_ids.pop()
     sen_ids = [101] + sen_ids + [102]
+    sen_ids = sen_ids + [0] * (fix_length - len(sen_ids))
     return sen_ids
+
 
 def gen_tensor(dataset):
     sen1 = torch.LongTensor([item["sen1"] for item in dataset])

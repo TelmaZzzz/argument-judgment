@@ -20,6 +20,7 @@ import logging
 logging.getLogger().setLevel(logging.INFO)
 warnings.filterwarnings("ignore")
 
+
 def prepare_data(path):
     raw_data = common.read_raw_data(path)
     data = common.get_theis2idea(raw_data) + common.get_idea2support(raw_data) + common.get_neutral(raw_data, 20000)
@@ -34,6 +35,7 @@ def prepare_data(path):
     test_data = re_data[int(len(re_data)*0.9):]
     return train_data, valid_data, test_data
 
+
 def load_data(path):
     re_data = []
     with open(path, "r", encoding="utf-8") as f:
@@ -45,6 +47,7 @@ def load_data(path):
     # assert data[0]["sen1"] == "但其实并非如此，外面那层泥土自己也可以剥去，自己让自己绽放光彩。"
     logging.debug(re_data[0])
     return re_data
+
 
 if __name__ == "__main__":
     logging.info("Prepare raw data...")
@@ -65,9 +68,9 @@ if __name__ == "__main__":
     valid_sen1, valid_sen1_mask, valid_sen2, valid_sen2_mask, valid_label = \
         common.gen_tensor(valid_data)
     train_dataset = torch.utils.data.TensorDataset(train_sen1, train_sen2, train_sen1_mask,
-        train_sen2_mask, train_label)
+                                                   train_sen2_mask, train_label)
     valid_dataset = torch.utils.data.TensorDataset(valid_sen1, valid_sen2, valid_sen1_mask,
-        valid_sen2_mask, valid_label)
+                                                   valid_sen2_mask, valid_label)
     train_iter = torch.utils.data.DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     valid_iter = torch.utils.data.DataLoader(valid_dataset, batch_size=args.batch_size)
     logging.info("Data preparing finished!!!")
@@ -75,5 +78,18 @@ if __name__ == "__main__":
     logging.debug(label_vocab[0])
     args.class_num = len(label_vocab[0])
     args.embed_num = len(sen_vocab[0])
-    model = ESIM.ESIM(args).cuda()
-    train.train(train_iter, valid_iter, model, args)
+    if args.mode == "predict":
+        model = torch.load(args.model_load_path).cuda()
+        test_rawdata = load_data(args.test_path)
+        test_data = common.word2idx(test_rawdata, sen_vocab, label_vocab)
+        test_data = common.fix_dataset(test_data, sen_vocab, args.fix_length)
+        test_sen1, test_sen1_mask, test_sen2, test_sen2_mask, test_label = \
+            common.gen_tensor(test_data)
+        test_dataset = torch.utils.data.TensorDataset(test_sen1, test_sen2, test_sen1_mask,
+                                                      test_sen2_mask, test_label)
+        test_iter = torch.utils.data.DataLoader(test_dataset, batch_size=args.batch_size)
+        _ = train.eval(test_iter, model, args)
+        logging.info("END")
+    else:
+        model = ESIM.ESIM(args).cuda()
+        train.train(train_iter, valid_iter, model, args)
