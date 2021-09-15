@@ -211,6 +211,7 @@ def sembert_train(train_iter, valid_iter, model, args):
                         s_acc = n_acc
                         save(model, args.model_save_path)
                 model.train()
+                return
             need_eval += 1
         logging.info("Epoch {} is finished!!!".format(step + 1))
         logging.info("train loss: {:.4f}".format(loss_sum / len(train_iter)))

@@ -67,6 +67,7 @@ def main(args):
     valid_data = common.load_data(args.valid_path)
     tokenizer = BertTokenizer.from_pretrained(args.model_name)
     _, label_vocab = common.build_vocab(train_data)
+    logging.info(label_vocab[0])
     train_sens = torch.LongTensor([common.bert_concat_tokenizer(iter["sen1"], iter["sen2"], tokenizer, args.fix_length) for iter in train_data])
     train_labels = torch.LongTensor([label_vocab[1][iter["label"]] for iter in train_data])
     valid_sens = torch.LongTensor([common.bert_concat_tokenizer(iter["sen1"], iter["sen2"], tokenizer, args.fix_length) for iter in valid_data])
@@ -631,8 +632,9 @@ def SemBert_data_prepare(args):
     train_data = load_data(args.train_path)
     valid_data = load_data(args.valid_path)
     test_data = load_data(args.test_path)
-    # train_data = train_data[:int(len(train_data) * 0.1)]
-    # valid_data = valid_data[:int(len(valid_data) * 0.1)]
+    train_data = train_data[:20]
+    valid_data = valid_data[:20]
+    test_data = test_data[:20]
     label_vocab = ({"A2B": 0, "B2A": 1, "Neutral": 2}, ["A2B", "B2A", "Neutral"])
     args.class_num = 3
     threads = []
